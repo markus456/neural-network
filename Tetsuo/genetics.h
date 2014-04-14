@@ -13,6 +13,7 @@
 #include <random>
 #include <chrono>
 #include <iostream>
+#include <SFML\Graphics.hpp>
 class GenParams{
 public:
 	//Utility constants
@@ -36,13 +37,7 @@ protected:
 	double _x,_y,_w,_h;
 public:
 	Point(float x = 0, float y = 0, float w = 0, float h = 0):_x(x),_y(y),_w(w),_h(h){}
-	Point& operator+(const Point& p){
-		_x += p._x;
-		_y += p._y;
-		_w += p._w;
-		_h += p._h;
-		return *this;
-	}
+
 	Point& operator=(const Point& p){
 		_x = p._x;
 		_y = p._y;
@@ -71,12 +66,11 @@ public:
 		_h = p._h;
 		return *this;
 	}
-	Point& operator-(const Point& p){
-		_x -= p._x;
-		_y -= p._y;
-		_w -= p._w;
-		_h -= p._h;
-		return *this;
+	Point operator+(const Point& p){
+		return Point(_x + p._x,_y + p._y,_w + p._w,_h + p._h);
+	}
+	Point operator-(const Point& p){
+		return Point(_x - p._x,_y - p._y,_w - p._w,_h - p._h);
 	}
 	double distance(const Point& p){
 		return sqrt(pow(p._x-_x,2)+pow(p._y-_y,2));
@@ -100,7 +94,7 @@ protected:
 	std::vector<double> dna_values;
 	double genomeFitness;
 public:
-	
+
 	Genome(std::vector<double>& init):dna("Genome") {
 		genomeFitness = 1.f;
 		dna_values = init;
@@ -397,103 +391,76 @@ public:
 	void swapPopulation(std::vector<Genome>& genomes) {
 		population.swap(genomes);
 	}
+	void revertPopulation(std::vector<Genome>& genomes){
+		population = genomes;
+	}
 	void evolve(std::vector<Genome>& nextgen, Genome& a, Genome& b) {
 		std::vector<double> c1,c2,p1,p2;
 		std::mt19937 rnum_gen(std::chrono::system_clock::now().time_since_epoch().count());
 		p1 = a.getData();
 		p2 = b.getData();
-		if(p1.size()==0||p2.size()==0)return;
+		if(p1.size()!=p2.size())return;
 		if(rand() % 100 < GenParams::CROSSOVER) {
-			for(int i = 0;i<p1.size();i++){
-				int rnd = rand() % 100;
-				float first = 100*(a.fitness()/(a.fitness()+b.fitness()));
-				c1.push_back(rnd<first? p1.at(i):p2.at(i));
-				c2.push_back(rnd<first? p2.at(i):p1.at(i));
-			}
+			int rndpoint = rand() % p1.size();
+			auto p1_i = p1.begin()+rndpoint;
+			auto p2_i = p2.begin()+rndpoint;
+			c1.assign(p1.begin(),p1_i);
+			c2.assign(p2.begin(),p2_i);
+			c1.insert(c1.end(),p2_i,p2.end());
+			c2.insert(c2.end(),p1_i,p1.end());
 		} else {
 			c1 = p1;
 			c2 = p2;
 		}
-		if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
-			double rnd = (double)rnum_gen()/((double)rnum_gen.max()*0.99);
-			rnd = rand() % 2? rnd:-rnd;
-			c1[rand() %c1.size()] = rnd;
-		}
-		if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
-			double rnd = (double)rnum_gen()/((double)rnum_gen.max()*0.99);
-			rnd = rand() % 2? rnd:-rnd;
-			c2[rand() %c2.size()] = rnd;
-		}
 		for(int i = 0;i<c1.size();i++){
 			if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
-				double rnd = (double)rnum_gen()/(double)rnum_gen.max();
-				rnd = rand() % 2? rnd:-rnd;
+				double rnd = (double)rnum_gen()/(double)rnum_gen.max() - (double)rnum_gen()/(double)rnum_gen.max();
 				c1[i] += rnd;
 			}
 			if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
-				double rnd = (double)rnum_gen()/(double)rnum_gen.max();
-				rnd = rand() % 2? rnd:-rnd;
+				double rnd = (double)rnum_gen()/(double)rnum_gen.max() - (double)rnum_gen()/(double)rnum_gen.max();
 				c2[i] += rnd;
 			}
 		}
 		double af = (a.fitness()+b.fitness())/2;
 		Genome g1(c1);
 		g1.fitness(af);
+		Genome g2(c2);
+		g2.fitness(af);
 		nextgen.push_back(g1);
+		nextgen.push_back(g2);
 	}
 	double evaluate(const Genome& g) {
 		return g.fitness();
 	}
 	void update() {
-		double total = 0;
+		double total_fitness = 0;
 		std::vector<Genome> next_generation;
 		std::map<std::string,double> propagate;
 		for (auto& g : population) {
-			propagate[g.get()] = evaluate(g);
-			total += propagate[g.get()];
-		}
-		double valbegin = 0;
-		for(int i = 0; i<population.size(); i++) {
-			double p = population[i].fitness()/total;
-			p = p*1000;
-			prop_val.insert(std::make_pair(std::make_pair(valbegin,valbegin+p),i));
-			valbegin += p;
+			total_fitness += g.fitness();
 		}
 		if(POPULATION_SIZE==0&&population.size()>0) {
 			POPULATION_SIZE = population.size();
 		}
-		std::sort(population.begin(),population.end(),[](const Genome& a,const Genome& b) {
-			return a.fitness()<b.fitness();
-		});
-		while(next_generation.size()<POPULATION_SIZE/3){
-			evolve(next_generation,population.front(),population.front());
-		}
 		while(next_generation.size()<POPULATION_SIZE) {
-			int rnd, p1 = -1,p2 = -1;
-			while(p1<0) {
-				rnd = rand() % (int)(valbegin+1);
-				for(auto& a:prop_val) {
-					if(a.first.first<=rnd&&a.first.second>rnd) {
-						p1 = a.second;
-						break;
-					}
-				}
-			}
-			while(p2<0) {
-				rnd = rand() % (int)(valbegin+1);
-				for(auto& a:prop_val) {
-					if(a.first.first<=rnd&&a.first.second>rnd) {
-						if(a.second!=p1) {
-							p2 = a.second;
+			double trgt = rand() % RAND_MAX / RAND_MAX;
+			double current = 0.0;
+			int p1 = 0, p2 = 0;
+			for(auto& a:population){
+				current += a.fitness()/total_fitness;
+				if(current>=trgt){
+					current = 0.0;
+					trgt = rand() % RAND_MAX / RAND_MAX;
+					for(auto& b:population){
+						current += b.fitness();
+						if(current>=trgt){
+							evolve(next_generation,a,b);
 						}
-						break;
 					}
 				}
 			}
-			evolve(next_generation,population[p1],population[p2]);
 		}
-
-		prop_val.clear();
 		population = next_generation;
 	}
 	std::vector<Genome> getPopulation() {
@@ -507,15 +474,15 @@ private:
 	double bias,threshold;
 
 public:
-	
+
 	Neuron(int c = 0) {
 		connections = c;
 		threshold = 1.5;
 		bias = -1.f;
 		std::mt19937 rnum_gen(std::chrono::system_clock::now().time_since_epoch().count());
 		for(int i = 0; i<c+1; i++) {
-			double rnd = (double)rnum_gen()/((double)rnum_gen.max()*0.99);
-			rnd = rand() % 2? rnd:-rnd;
+			double rnd = (double)rnum_gen()/(double)rnum_gen.max();
+			rnd -= (double)rnum_gen()/(double)rnum_gen.max();
 			weights.push_back(rnd);
 		}
 	}
@@ -648,31 +615,47 @@ public:
 		return genebase;
 	}
 };
-class Creature {
+inline double asDeg(double rad){
+	return (rad/GenParams::PI)*180.0;
+}
+inline double asRad(double deg){
+	return (deg/180.0)*GenParams::PI;
+}
+inline double sigmoid(double f) {
+	return 1.f/(1.f+exp(-f/GenParams::ACTIVATION_RESPONSE));
+}
+inline double normalize(double a, double b){
+	return sqrt(pow(a,2)+pow(b,2));
+}
+inline double distance(const sf::Vector2f& a, const sf::Vector2f& b){
+	return sqrt(pow(b.x-a.x,2)+pow(b.y-a.y,2));
+}
+class Creature :public sf::Drawable {
 protected:
-	double x,y,vx,vy,target,angle,sizex,sizey,speed,tx,ty,l_leg,r_leg;
+	double target,angle,speed,tx,ty,sizex,sizey,l_leg,r_leg;
 	Genome dna;
 	VectorPopulation gene_evolution;
-	Brain* b;
-	int hitcount, n_inputs, n_outputs,neuron_count,layer_count;
+	std::unique_ptr<Brain> b;
+	int n_inputs, n_outputs,neuron_count,layer_count;
 	std::vector<double> output;
-	std::deque<Point> trail;
+	std::vector<sf::Vertex> trail;
+	sf::CircleShape body;
+	sf::Vector2f velocity;
+	std::vector<double> input;
 
 public:
-	Creature(int n_in = 4, int n_out = 2,int lrs = 1,int nrn_layer = 6) {
-		hitcount = 0;
-		sizex = sizey = 0;
-		target = rand() % 180;
-		target = (target/180)*GenParams::PI;
-		speed = 2;
-		l_leg = r_leg = 0.0;
-		angle = target;
-		vx = vy = 0;
-		n_inputs = n_in;
-		n_outputs = n_out;
-		neuron_count = nrn_layer;
-		layer_count = lrs;
-		b = new Brain(n_in,n_out,lrs,nrn_layer);
+	Creature(int n_in = 4, int n_out = 2,int lrs = 1,int nrn_layer = 6):
+		target(0.0),speed(1.0),tx(0.0),ty(0.0),sizex(0.0),sizey(0.0),l_leg(0.0),r_leg(0.0),
+		n_inputs(n_in), n_outputs(n_out),neuron_count(nrn_layer),layer_count(lrs),body(sf::CircleShape(15.f,5))
+	{
+		body.setFillColor(sf::Color::Red);
+		body.setOutlineColor(sf::Color::White);
+		body.setOutlineThickness(2.f);
+		body.setOrigin(body.getLocalBounds().width/2,body.getLocalBounds().height/2);
+		input.reserve(n_inputs);
+		output.reserve(n_outputs);
+		angle = ((rand() % 180)/180.f - (rand() % 180)/180.f)*3.1415;
+		b.reset(new Brain(n_in,n_out,lrs,nrn_layer));
 		auto a = b->buildGenebase();
 		std::vector<double> vals;
 		vals.assign(a.begin(),a.end());
@@ -680,30 +663,49 @@ public:
 		setDNA(dna);
 	}
 	Creature(const Creature& c) {
-		hitcount = 0;
-		sizex = c.sizex;
-		sizey = c.sizey;
+
 		target = c.target;
 		speed = c.speed;
 		l_leg = r_leg = 0.0;
-		angle = c.angle;
-		vx = c.vx;
-		vy = c.vy;
-		x = c.x;
-		y = c.y;
+		sizex = c.sizex;
+		sizey = c.sizey;
+		velocity = c.velocity;
 		n_inputs = c.n_inputs;
 		n_outputs = c.n_outputs;
+		angle = c.angle;
 		neuron_count = c.neuron_count;
 		layer_count = c.layer_count;
-		b = new Brain(n_inputs,n_outputs,layer_count,neuron_count);
+		input.reserve(n_inputs);
+		output.reserve(n_outputs);
+		body = c.body;
+		b.reset(new Brain(n_inputs,n_outputs,layer_count,neuron_count));
 		dna = c.dna;
 		setDNA(dna);
 	}
-	std::deque<Point>& getTrail(){return trail;}
+	void draw(sf::RenderTarget& target, sf::RenderStates states)const{
+		target.draw(&trail[0],trail.size(),sf::LinesStrip,states);
+		target.draw(body);
+	}
 	void foodAt(int x_,int y_) {
-		target = atan2(-(y_-y),x_-x);
+		auto pos = body.getPosition();
+		target = atan2(-(y_-pos.y),x_-pos.x);
 		tx = x_;
 		ty = y_;
+	}
+	void foodPool(const std::vector<sf::Vector2f>& source) {
+		auto pos = body.getPosition();
+		double shortest = std::numeric_limits<double>::max();
+		double tmp;
+		auto t = &source.front();
+		for(const auto& a:source){
+			if((tmp = distance(pos,a))<shortest){
+				shortest = tmp;
+				t = &a;
+			}
+		}
+		target = atan2(-(t->y-pos.y),t->x-pos.x);
+		tx = t->x;
+		ty = t->y;
 	}
 	void areaSize(int x, int y) {
 		sizex = x;
@@ -713,35 +715,28 @@ public:
 		speed = f;
 	}
 	void travelTo(double x_, double y_) {
-		target = atan2(-(y_-y),x_-x);
+		auto pos = body.getPosition();
+		target = atan2(-(y_-pos.y),x_-pos.x);
 	}
-	double sigmoid(double f) {
-		return 1.f/(1.f+exp(-f/GenParams::ACTIVATION_RESPONSE));
-	}
-	double normalize(double a, double b){
-		return sqrt(pow(a,2)+pow(b,2));
-	}
-	void update() {
 
+	void update() {
+		auto pos = body.getPosition();
 		if(trail.size()==0){
-			trail.push_back(Point(x,y));
-		}else if(trail.back().distance(Point(x,y))>10){
-			trail.push_back(Point(x,y));
+			trail.push_back(sf::Vertex(sf::Vector2f(pos.x,pos.y)));
+		}else if(distance(sf::Vector2f(pos.x,pos.y),trail.back().position)>10){
+			trail.push_back(sf::Vertex(sf::Vector2f(pos.x,pos.y)));
 		}
-		while(trail.size()>GenParams::TRAIL_LENGTH)trail.pop_front();
-		std::vector<double> input;
-		double ntx = tx-x, nty = -(ty-y), nx = vx, ny = vy;
+		while(trail.size()>GenParams::TRAIL_LENGTH){
+			trail.erase(trail.begin());
+		}
+		input.clear();
+		double ntx = tx-pos.x, nty = -(ty-pos.y), nx = velocity.x, ny = velocity.y;
 		ntx = ntx/normalize(ntx,nty);
 		nty = nty/normalize(ntx,nty);
 		if(nx!=0||ny!=0){
 			nx = nx/normalize(nx,ny);
 			ny = ny/normalize(nx,ny);
 		}
-		/*if(target-GenParams::PI_2>angle){
-			target = angle-GenParams::PI_2;
-		}else if(target+GenParams::PI_2>angle){
-			target = angle+GenParams::PI_2;
-		}*/
 		input.push_back(ntx);
 		input.push_back(nty);
 		input.push_back(nx);
@@ -752,15 +747,14 @@ public:
 		double dir = l_leg-r_leg;
 		dir = dir>GenParams::PI/8?GenParams::PI/8:dir;
 		dir = dir<-GenParams::PI/8?-GenParams::PI/8:dir;
-		double turnrate = (output[0]+output[1])/2.f;
 		angle += dir;
-		vx = cos(angle)*turnrate*speed;
-		vy = sin(angle)*turnrate*speed;
-		if(x+vx>0&&x+vx<sizex) {
-			x += vx;
-		}
-		if(y-vy>0&&y-vy<sizey) {
-			y -= vy;
+		double turnrate = (output[0]+output[1])/2.f;
+		velocity.x = cos(angle)*turnrate*speed;
+		velocity.y = -sin(angle)*turnrate*speed;
+		auto tpos = pos+velocity;
+		if(tpos.x>0&&tpos.y>0&&tpos.x<sizex&&tpos.y<sizey) {
+			body.move(velocity);
+			body.setRotation(asDeg(-angle));
 		}
 	}
 	double targetX() {
@@ -792,49 +786,32 @@ public:
 		}
 		return output;
 	}
-	void setPos(double x_, double y_) {
-		x = x_;
-		y = y_;
+	void setPos(sf::Vector2f p){
+		body.setPosition(p);
 	}
-	void setPos(Point p){
-		x = p.x();
-		y = p.y();
+	sf::Vector2f getPos(){
+		return body.getPosition();
 	}
-	Point getPos(){
-		return Point(x,y);
-	}
-	void setvx(double v) {
-		vx = v;
-	}
-	void setvy(double v) {
-		vy = v;
-	}
-	double getx()const {
-		return x;
-	}
-	double gety()const {
-		return y;
+	void setv(sf::Vector2f v) {
+		velocity = v;
 	}
 	double getAngle() {
-		return atan2(-vy,vx);
+		return atan2(-velocity.y,velocity.x);
 	}
 	double getAngleInDegrees() {
-		return (atan2(-vy,vx)/GenParams::PI)*180;
+		return (atan2(-velocity.y,velocity.x)/GenParams::PI)*180;
 	}
 	double getInvertedAngleInDegrees() {
-		return (atan2(vy,vx)/GenParams::PI)*180;
+		return (atan2(velocity.y,velocity.x)/GenParams::PI)*180;
 	}
-	double getvx()const {
-		return vx;
+	const sf::Vector2f& getv()const {
+		return velocity;
 	}
-	double getvy()const {
-		return vy;
-	}
-	std::vector<double> getOutputs()const {
+	const std::vector<double>& getOutputs()const {
 		return output;
 	}
-	virtual ~Creature() {
-		delete b;
-	}
+	virtual ~Creature() {}
 };
 #endif
+
+
