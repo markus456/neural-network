@@ -13,6 +13,7 @@
 #include <random>
 #include <chrono>
 #include <iostream>
+#include <SFML\Graphics.hpp>
 class Point{
 protected:
 	double _x,_y,_w,_h;
@@ -480,8 +481,8 @@ public:
 class Neuron {
 private:
 	int connections;
-	std::vector<double> weights;
-	double bias,threshold;
+	std::vector<double> weights,in_values;
+	double bias,threshold,out_value,signal_error,error_delta;
 
 public:
 	static const double ACTIVATION_RESPONSE;
@@ -489,15 +490,40 @@ public:
 		connections = c;
 		threshold = 1.5;
 		bias = -1.f;
+		signal_error = 0;
+		out_value = 0;
 		std::mt19937 rnum_gen(std::chrono::system_clock::now().time_since_epoch().count());
 		for(int i = 0; i<c+1; i++) {
-			double rnd = (double)rnum_gen()/(double)rnum_gen.max();
-			rnd = rand() % 2? rnd:-rnd;
+			double rnd = (double)rnum_gen()/(double)rnum_gen.max() - (double)rnum_gen()/(double)rnum_gen.max();
 			weights.push_back(rnd);
+			in_values.push_back(0);
 		}
+	}
+	void setDelta(double d){
+		error_delta = d;
+	}
+	double getDelta(){
+		return error_delta;
+	}
+	void setError(double err){
+		signal_error = err;
+	}
+	std::vector<double>& getInputValues(){
+		return in_values;
+	}
+	double getError(){
+		return signal_error;
 	}
 	unsigned int dnaSize() {
 		return weights.size();
+	}
+	std::vector<double>& getWeights(){
+		return weights;
+	}
+	void setWeights(std::vector<double> newvalues){
+		if(newvalues.size()==weights.size()){
+			weights = newvalues;
+		}
 	}
 	void format(std::list<double>& new_w) {
 		for(int i = 0; i<weights.size(); i++) {
@@ -510,14 +536,16 @@ public:
 		if(inputs.size()==connections) {
 			for(int i = 0; i<weights.size()-1; i++) {
 				activation += weights[i]*inputs[i];
+				in_values[i] = inputs[i]; 
 			}
 			activation += weights[weights.size()-1]*bias;
 		}
 		double sigmoid = (1.f/(1+exp(-activation/ACTIVATION_RESPONSE)));
+		out_value = sigmoid;
 		return sigmoid;
 	}
-	std::vector<double> getWeights() {
-		return weights;
+	double getOutputValue(){
+		return out_value;
 	}
 };
 class Membrane {
@@ -530,6 +558,11 @@ public:
 			neurons.push_back(Neuron(cnns));
 		}
 	}
+
+	std::vector<Neuron>& getNeurons(){
+		return neurons;
+	}
+
 	void format(std::list<double>& new_w) {
 		for(int i = 0; i<neurons.size(); i++) {
 			neurons[i].format(new_w);
@@ -615,6 +648,11 @@ public:
 	int nOutputs()const {
 		return n_outputs;
 	}
+
+	std::vector<Membrane>& getMembranes(){
+		return layers;
+	}
+
 	std::list<double> buildGenebase() {
 		std::list<double> genebase;
 		std::vector<double> tmp;
@@ -802,6 +840,105 @@ public:
 	}
 	virtual ~Creature() {
 		delete b;
+	}
+};
+
+/*
+*Character recognition with a forward-feeding, backpropagation trained neural network.
+*/
+class Beholder:public Brain{
+protected:
+	unsigned int columns,rows;
+	double learning_rate,global_error;
+public:
+	//Number of pixels in inputs and outputs , number neuron layers and the neuron count for each layer.
+	Beholder(int ccount, int rcount, int lrs, int nrns):Brain(ccount*rcount,3,lrs,nrns), columns(ccount),rows(rcount),learning_rate(0.99){}
+
+	virtual void train(std::vector<sf::RectangleShape>& inputs,char exp){
+		const char* expected = &exp;
+		int xp = strtol(expected,0,0);
+		int answer = analyze(inputs);
+		std::vector<double> deltas;
+		int combined = answer^xp;
+		for(int i = 0;i<3;i++){
+			int var1 = xp&1?1:0;
+			if(var1){
+				deltas.push_back(0.9f);
+			}else{
+				deltas.push_back(0.1f);
+			}
+			xp >>= 1;
+		}
+		//Output layer error
+		int o_layer =getMembranes().size()-1;
+		int z = 0;
+		for(int i = getMembranes()[o_layer].getNeurons().size()-1;i>-1;i--){
+			double orig_out = getMembranes()[o_layer].getNeurons()[i].getOutputValue();
+			double delta = deltas[z++] - orig_out;
+			getMembranes()[o_layer].getNeurons()[i].setDelta(delta);
+			double error = delta*orig_out*(1-orig_out);
+			getMembranes()[o_layer].getNeurons()[i].setError(error);
+		}
+		//Hidder layer error
+		for(int i = getMembranes().size()-2;i>-1;i--){
+			int x = 0;
+			for(int j = getMembranes()[i].getNeurons().size()-1;j>-1;j--){
+				double sum = 0;
+				for(int k = getMembranes()[i+1].getNeurons().size()-1;k>-1;k--){
+					sum += getMembranes()[i+1].getNeurons()[k].getError()*getMembranes()[i+1].getNeurons()[k].getWeights()[j];
+				}
+				double error = getMembranes()[i].getNeurons()[j].getOutputValue()*sum*(1-getMembranes()[i].getNeurons()[j].getOutputValue());
+				getMembranes()[i].getNeurons()[j].setError(error);
+
+			}
+		}
+
+		//Output layer correction
+		for(int i = getMembranes()[o_layer].getNeurons().size()-1;i>-1;i--){
+			for(int j = 0; j<getMembranes()[o_layer].getNeurons()[i].getWeights().size();j++){
+				double delta_w = learning_rate*getMembranes()[o_layer].getNeurons()[i].getInputValues()[j]*getMembranes()[o_layer].getNeurons()[i].getError();
+				getMembranes()[o_layer].getNeurons()[i].getWeights()[j] += delta_w;
+			}
+		}
+
+		//Hidden layer correction
+		for(int i = getMembranes().size()-2;i>-1;i--){
+			for(int j = getMembranes()[i].getNeurons().size()-1;j>-1;j--){
+				for(int k = 0;k<getMembranes()[i].getNeurons()[j].getWeights().size();k++){
+					double delta_w = learning_rate*getMembranes()[i].getNeurons()[j].getInputValues()[k]*getMembranes()[i].getNeurons()[j].getError();
+					getMembranes()[i].getNeurons()[j].getWeights()[k] += delta_w;
+				}
+			}
+		}
+		learning_rate *= 0.999;
+		global_error = 0;
+		for(int i = getMembranes()[o_layer].getNeurons().size()-1;i>-1;i--){
+			global_error += 0.5*pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
+		}
+	}
+	double getGlobalError(){
+		return global_error;
+	}
+	virtual int analyze(std::vector<sf::RectangleShape>& inputs){
+		if(inputs.size()==columns*rows){
+			std::vector<double> values;
+			for(auto& a:inputs){
+				auto clr = a.getFillColor();
+				if(clr==sf::Color::Black){
+					values.push_back(1.f);
+				}else{
+					values.push_back(0.f);
+				}
+			}
+			auto outs = Brain::update(values);
+			int result = 0;
+			for(int i = 0;i<outs.size();i++){
+				result <<= 1;
+				result |= outs[i]>0.5?1:0;
+			}
+			return result;
+		}
+		return -1;
 	}
 };
 #endif
