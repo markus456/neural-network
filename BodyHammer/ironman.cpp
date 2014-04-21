@@ -1,49 +1,168 @@
 #include "genetics.h"
 #include <iostream>
+#include <fstream>
 #include <ctime>
 #include <cmath>
 #include <thread>
 #include <sstream>
-//#include "glew.h"
 #include <SFML\Graphics.hpp>
 #define GENERATIONS 1000
 #define SCREEN_W 1200
 #define SCREEN_H 800
+#define MAX_TRAINING_ITERATIONS 250
 #define X_RES 16
 #define Y_RES 16
+#define IMAGE_DATA 1
+#define IMAGE_DATA_W 4
+#define IMAGE_DATA_H 3
 bool update();
 void render();
+void train();
 std::vector<sf::RectangleShape> input_grid;
+std::map<char,std::vector<std::string>> training_data;
+std::map<char,DataSet<double>> training_set;
+std::vector<char> found_sets;
 sf::RenderWindow* window;
 sf::Text* text;
+sf::Clock beholder_speed;
+sf::Image data;
 Beholder* beholder;
 int fcnt,evolution_rate,increase_mutations, decrease_mutations;
-double speed, pavg, avg, current_mutation_rate;
+double speed, pavg, avg, current_mutation_rate,desired_error;
 int counter, gen;
-
-int wmain(void) {	
+bool training;
+unsigned int smallest_sample;
+int main(int argc, char** argv)
+{
 	sf::ContextSettings settings;
+
+
+	training = true;
+	desired_error = 0.1;
 	settings.antialiasingLevel = 8;
 	window = new sf::RenderWindow(sf::VideoMode(SCREEN_W,SCREEN_H),"The Beholder",sf::Style::Default,settings);
-	beholder = new Beholder(X_RES,Y_RES,1,(X_RES*Y_RES)/2);
+	window->setFramerateLimit(60);
+	beholder = new Beholder(X_RES,Y_RES,4,2,(X_RES*Y_RES)/2);
 	sf::Font font;
 	font.loadFromFile("revalia.ttf");
 	text = new sf::Text();
 	text->setFont(font);
+
+
+	if(IMAGE_DATA) {
+		if(!data.loadFromFile("numbers.png")) {
+			std::cout << "error loading image data!\n";
+		}
+		char target = '0';
+		for(int ypos = 0; ypos<IMAGE_DATA_H; ypos++) {
+			for(int xpos = 0; xpos<IMAGE_DATA_W; xpos++) {
+				std::vector<double> symbol;
+				for(int y = ypos*Y_RES; y<ypos*Y_RES+Y_RES; y++) {
+					for(int x = xpos*X_RES; x<xpos*X_RES+X_RES; x++) {
+						if(data.getPixel(x,y)==sf::Color::Black) {
+							symbol.push_back(1.0);
+						} else {
+							symbol.push_back(0.0);
+						}
+					}
+				}
+				training_set[target].push_row(symbol);
+				found_sets.push_back(target);
+				target++;
+			}
+		}
+	} else {
+		std::stringstream ss;
+		std::string fp;
+		std::fstream infile;
+		for(char start = '0'; start<'9'+1; start++) {
+			ss.str("");
+			ss << start << ".txt";
+			fp = ss.str();
+			infile.open(fp.c_str(),std::ios_base::in);
+			smallest_sample = ~0;
+			if(infile) {
+				std::cout << "training set for '" << start << "' found, reading to memory.\n";
+				char buffer[X_RES*Y_RES+1];
+				while(infile.getline(buffer,X_RES*Y_RES+1)) {
+					training_data[start].push_back(buffer);
+				}
+
+				smallest_sample = training_data[start].size()<smallest_sample?training_data[start].size():smallest_sample;
+				std::cout << "found " << training_data[start].size() << " sets of data.\n";
+			} else {
+				std::cout << "training set for '" << start << "' not found.\n";
+			}
+			infile.close();
+		}
+		std::cout << "smallest sample: " << smallest_sample << "\n";
+
+		for(char start = '0'; start<'9'+1; start++) {
+			if(training_data.count(start)>0) {
+				found_sets.push_back(start);
+			}
+		}
+		for(char ch:found_sets) {
+			for(auto& line: training_data[ch]) {
+				std::vector<double> row;
+				for(auto line_iter = line.begin(); line_iter!=line.end(); line_iter++) {
+					if(*line_iter=='1') {
+						row.push_back(1.0);
+					} else {
+						row.push_back(0.0);
+					}
+				}
+				std::random_shuffle(row.begin(),row.end());
+				training_set[ch].push_row(row);
+			}
+		}
+	}
 	text->setCharacterSize(24.f);
 	text->setColor(sf::Color::White);
-	for(int y = 0;y<Y_RES;y++){
-		for(int x = 0;x<X_RES;x++){
+	for(int y = 0; y<Y_RES; y++) {
+		for(int x = 0; x<X_RES; x++) {
 			input_grid.push_back(sf::RectangleShape(sf::Vector2f(32.f,32.f)));
 			input_grid.back().setPosition(32.f*x,32.f*y);
 			input_grid.back().setFillColor(sf::Color::White);
 		}
 	}
 	text->setPosition(0,Y_RES*32+32);
+
+	beholder_speed.restart();
 	while(update())render();
 	return 0;
 }
-bool update() {
+void train()
+{
+
+	long iter = 0;
+	int lc = 0;
+	std::vector<double> errors;
+	errors.reserve(51);
+	double error_avg = 9999.9;
+	double prev_error = error_avg;
+	std::cout << "training...\n";
+	while(iter<MAX_TRAINING_ITERATIONS) {
+		if(iter % (MAX_TRAINING_ITERATIONS/10) == 0)std::cout << ((float)iter/(float)MAX_TRAINING_ITERATIONS)*100.f << "%\n";
+		for(char ch:found_sets) {
+			beholder->train(training_set[ch].at(0),ch);
+			errors.push_back(beholder->getGlobalError());
+		}
+		error_avg = 0.0;
+		for(double d:errors) {
+			error_avg += d;
+		}
+		error_avg *= 0.5;
+		errors.clear();
+		if(iter % 10 == 0) {
+			std::cout << "Global error: " << error_avg << std::endl;
+		}
+		iter++;
+	}
+	std::cout << "the beholder is trained.\n";
+}
+bool update()
+{
 	sf::Event event;
 	int ans = -1;
 	std::stringstream ss;
@@ -54,40 +173,116 @@ bool update() {
 		case sf::Event::Closed:
 			return false;
 		case sf::Event::KeyPressed:
-			if(event.key.code==sf::Keyboard::F1){
-				for(auto& a:input_grid){
+			if(event.key.code==sf::Keyboard::F1) {
+				for(auto& a:input_grid) {
 					a.setFillColor(sf::Color::White);
 				}
-			}else if(event.key.code==sf::Keyboard::F2){
+			} else if(event.key.code==sf::Keyboard::F2) {
 				ans = beholder->analyze(input_grid);
 				std::stringstream ss;
 				ss << "The Beholder sees a: " << ans;
 				text->setString(sf::String(ss.str()));
+			} else if(event.key.code==sf::Keyboard::F3) {
+				training = !training;
+				std::stringstream ss;
+				ss << "Mode: ";
+				if(training) {
+					ss << "network training";
+				} else {
+					ss << "training set generation";
+				}
+				text->setString(sf::String(ss.str()));
+			} else if(event.key.code==sf::Keyboard::F5) {
+				text->setString(sf::String("Training the beholder..."));
+				train();
 			}
 			break;
 		case sf::Event::TextEntered:
+			if(IMAGE_DATA) {
 				tmp = event.text.unicode;
-				beholder->train(input_grid,tmp.toAnsiString()[0]);
-				ss << "The Beholder is trained with: " << tmp.toAnsiString() << " Global error: " << beholder->getGlobalError();
-				text->setString(ss.str());
-			break;
-		case sf::Event::MouseMoved:
-			if(sf::Mouse::isButtonPressed(sf::Mouse::Left)){
-			for(auto& a:input_grid){
-				if(a.getLocalBounds().contains(sf::Vector2f(event.mouseMove.x,event.mouseMove.y)-a.getPosition())){
-					a.setFillColor(sf::Color::Black);
-					break;
+				char c = tmp.toAnsiString()[0];
+				if(c=='+') {
+					c = '9'+1;
+				} else if(c=='-') {
+					c = '9'+2;
+				}
+				if(training_set.count(c)) {
+					auto datarow = training_set[c].at(0);
+					int i = 0;
+					for(auto& a:input_grid) {
+						if(datarow[i]==1.0) {
+							a.setFillColor(sf::Color::Black);
+						} else {
+							a.setFillColor(sf::Color::White);
+						}
+						i++;
+					}
+				}
+			} else {
+				if(training) {
+					tmp = event.text.unicode;
+					beholder->train(input_grid,tmp.toAnsiString()[0]);
+					ss << "The Beholder is trained with: " << tmp.toAnsiString() << " Global error: " << beholder->getGlobalError();
+					text->setString(ss.str());
+				} else {
+					tmp = event.text.unicode;
+					ss << tmp.toAnsiString() << ".txt";
+					std::string fpath = ss.str();
+					std::fstream foutput(fpath.c_str(),std::ios_base::out|std::ios_base::app);
+					ss.str("");
+					for(auto& a:input_grid) {
+						if(a.getFillColor()==sf::Color::Black) {
+							ss << 1;
+						} else {
+							ss << 0;
+						}
+					}
+					ss << '\n';
+					auto str = ss.str();
+					foutput.write(str.c_str(),str.size());
+					ss.str("");
+					ss << "Pattern saves as: " << tmp.toAnsiString() << " File is : " << fpath;
+					text->setString(ss.str());
+
+					for(auto& a:input_grid) {
+						a.setFillColor(sf::Color::White);
+					}
 				}
 			}
+			break;
+		case sf::Event::MouseMoved:
+			if(sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+				for(auto& a:input_grid) {
+					if(a.getLocalBounds().contains(sf::Vector2f(event.mouseMove.x,event.mouseMove.y)-a.getPosition())) {
+						a.setFillColor(sf::Color::Black);
+						break;
+					}
+				}
 			}
 			break;
 		}
 	}
+	auto now = beholder_speed.getElapsedTime();
+	if(now>sf::milliseconds(250)) {
+		ans = beholder->analyze(input_grid);
+		std::stringstream ss;
+        ss << "The Beholder sees a: ";
+        if(ans==10){
+            ss << '+';
+        }else if(ans==11){
+            ss << '-';
+        }else{
+            ss << ans;
+        }
+
+		text->setString(sf::String(ss.str()));
+	}
 	return true;
 }
-void render() {
+void render()
+{
 	window->clear();
-	for(auto& a:input_grid){
+	for(auto& a:input_grid) {
 		window->draw(a);
 	}
 	window->draw(*text);
