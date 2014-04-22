@@ -7,12 +7,12 @@
 #include "glew.h"
 #include <SFML\Graphics.hpp>
 #define GENERATIONS 1000
-#define CREATURE_CAP 15
-#define FOOD_CAP 30
+#define CREATURE_CAP 8
+#define FOOD_CAP 8
 #define SCREEN_W 1200
 #define SCREEN_H 800
-#define AREA_W 5000
-#define AREA_H 5000
+#define AREA_W 1000
+#define AREA_H 1000
 bool update();
 void render();
 int stringPopulation();
@@ -26,67 +26,46 @@ sf::Shape* fToken;
 sf::RenderWindow* window;
 sf::Clock mouseclock,frameclock;
 sf::Text* text;
-sf::View camera(sf::FloatRect(AREA_W/2.f,AREA_H/2.f,SCREEN_W*2,SCREEN_H*2));
+sf::View camera;
 int fcnt,evolution_rate,increase_mutations, decrease_mutations;
 double speed, pavg, avg, current_mutation_rate,bestavg;
 int counter, gen, decline_counter;
 std::vector<Genome> best_so_far;
 void updateCreatures();
-void fastForward(int fgens) {
-	int fcounter = 0, gcounter = gen+fgens;	
+void fastForward(int fgens)
+{
+	int fcounter = 0, gcounter = gen+fgens;
 	std::stringstream ss;
-	while(gen<gcounter){
-		ss.str("");
-		window->clear();
-		ss << "Evolving " << fgens << " generations...";
-		text->setString(ss.str());
-		text->setPosition(sf::Vector2f(SCREEN_W/2-text->getLocalBounds().width/2,SCREEN_H/2-text->getLocalBounds().height/2));
-		window->draw(*text);
-		ss.str("");
-		ss << "Current generation: " << gen;
-		text->setString(ss.str());
-		text->setPosition(sf::Vector2f(SCREEN_W/2-text->getLocalBounds().width/2,SCREEN_H/2+text->getLocalBounds().height/2));
-		window->draw(*text);
-		window->display();
-		double ftest = 0;
+	ss.str("");
+	window->clear();
+	ss << "Evolving " << fgens << " generations...";
+	while(gen<gcounter) {
 		avg = 0;
 		for(auto& creature: creatures) {
 			creature->foodPool(food);
 			creature->update();
-			for(auto fd = food.begin();fd<food.end();fd++){
-				if(distance(creature->getPos(),*fd)<15){
+			for(auto fd = food.begin(); fd<food.end(); fd++) {
+				if(distance(creature->getPos(),*fd)<15) {
 					fd = food.erase(fd);
 					creature->increaseFitness(1.f);
 				}
 			}
-			avg += creature->getFitness();
-			if(creature->getFitness()>ftest){
-				ftest = creature->getFitness();
-			}
-		}
-		pavg = avg;
-		avg = avg/creatures.size();
-		if(avg>bestavg){
-			best_so_far = vpop->getPopulationRef();
-		}else if(avg < bestavg*0.85){
-			vpop->revertPopulation(best_so_far);
+
 		}
 
-		while(food.size()<FOOD_CAP){
+		while(food.size()<FOOD_CAP) {
 			food.push_back(sf::Vector2f(20 + rand() % (AREA_W-40), 10 + rand() % (AREA_H-20)));
 		}
 
-		if(fcounter>1) {
-			fcounter--;
-		} else {
+		if(--fcounter<0) {
 			gen++;
 			updateCreatures();
 			fcounter = 60*evolution_rate;
 		}
-
 	}
 }
-void updateCreatures() {
+void updateCreatures()
+{
 	srand(time(0));
 	vpop->clear();
 	for(int i = 0; i<creatures.size(); i++) {
@@ -94,12 +73,15 @@ void updateCreatures() {
 	}
 	vpop->update();
 	auto vec = vpop->getPopulation();
-	std::sort(creatures.begin(),creatures.end(),[](const std::shared_ptr<Creature>& a,const std::shared_ptr<Creature>& b){return a->getFitness()>b->getFitness();});
+	std::sort(creatures.begin(),creatures.end(),[](const std::shared_ptr<Creature>& a,const std::shared_ptr<Creature>& b) {
+		return a->getFitness()>b->getFitness();
+	});
 	for(int i = 0; i<creatures.size(); i++) {
 		creatures[i]->setDNA(vec[i]);
 	}
 }
-int wmain(void) {
+int main(int argc, char** argv)
+{
 	fcnt = 0;
 	speed = 0.5;
 	gen = 1;
@@ -108,6 +90,8 @@ int wmain(void) {
 	bestavg = 0;
 	decline_counter = 0;
 	srand(time(0));
+	camera.setSize(800,600);
+	camera.setCenter(AREA_W/2,AREA_H/2);
 	sf::ContextSettings settings;
 	settings.antialiasingLevel = 8;
 	window = new sf::RenderWindow(sf::VideoMode(SCREEN_W,SCREEN_H),"Evolution 0.3",sf::Style::Default,settings);
@@ -135,18 +119,19 @@ int wmain(void) {
 		creatures.push_back(std::shared_ptr<Creature>(new Creature(4,2,1,6)));
 		creatures.back()->setPos(sf::Vector2f(10 + rand() % (AREA_W-20), 10 + rand() % (AREA_H-20)));
 		creatures.back()->areaSize(AREA_W,AREA_H);
-		creatures.back()->setSpeed(8);
+		creatures.back()->setSpeed(3);
 	}
 	for(int i = 0; i<FOOD_CAP; i++) {
 		food.push_back(sf::Vector2f(20 + rand() % (AREA_W-40), 10 + rand() % (AREA_H-20)));
 	}
 
-	while(update()){
+	while(update()) {
 		render();
 	}
 	return 0;
 }
-bool update() {
+bool update()
+{
 	sf::Event event;
 	while(window->pollEvent(event)) {
 		switch (event.type) {
@@ -168,12 +153,12 @@ bool update() {
 				camera.move(1,0);
 				break;
 			case sf::Keyboard::F1:
-				for(int i = 0;i<10;i++){
+				for(int i = 0; i<10; i++) {
 					updateCreatures();
 				}
 				break;
 			case sf::Keyboard::F2:
-				for(int i = 0;i<100;i++){
+				for(int i = 0; i<100; i++) {
 					updateCreatures();
 				}
 				break;
@@ -186,20 +171,20 @@ bool update() {
 			}
 			break;
 		case sf::Event::MouseMoved:
-			if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)){
+			if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
 				camera.move(mousepos-window->mapPixelToCoords(sf::Mouse::getPosition(),camera));
 			}
 			mousepos = window->mapPixelToCoords(sf::Mouse::getPosition(),camera);
 			break;
 		case sf::Event::MouseWheelMoved:
-			if(event.mouseWheel.delta>0){
+			if(event.mouseWheel.delta>0) {
 				camera.zoom(1.15);
-			}else if(event.mouseWheel.delta<0){
+			} else if(event.mouseWheel.delta<0) {
 				camera.zoom(0.85);
 			}
 			break;
 		case sf::Event::MouseButtonPressed:
-			if(mouseclock.getElapsedTime().asMilliseconds()<333){
+			if(mouseclock.getElapsedTime().asMilliseconds()<333) {
 				auto center = window->mapPixelToCoords(sf::Vector2i(event.mouseButton.x,event.mouseButton.y),camera);
 				camera.setCenter(center);
 				camera.setSize(sf::Vector2f(SCREEN_W,SCREEN_H));
@@ -213,26 +198,26 @@ bool update() {
 	for(auto& creature: creatures) {
 		creature->foodPool(food);
 		creature->update();
-		for(auto fd = food.begin();fd<food.end();fd++){
-			if(distance(creature->getPos(),*fd)<15){
+		for(auto fd = food.begin(); fd<food.end(); fd++) {
+			if(distance(creature->getPos(),*fd)<15) {
 				fd = food.erase(fd);
 				creature->increaseFitness(1.f);
 			}
 		}
 		avg += creature->getFitness();
-		if(creature->getFitness()>ftest){
+		if(creature->getFitness()>ftest) {
 			ftest = creature->getFitness();
 		}
 	}
 	pavg = avg;
 	avg = avg/creatures.size();
-	if(avg>bestavg){
+	if(avg>bestavg) {
 		best_so_far = vpop->getPopulationRef();
-	}else if(avg < bestavg*0.85){
+	} else if(avg < bestavg*0.85) {
 		vpop->revertPopulation(best_so_far);
 	}
 
-	while(food.size()<FOOD_CAP){
+	while(food.size()<FOOD_CAP) {
 		food.push_back(sf::Vector2f(20 + rand() % (AREA_W-40), 10 + rand() % (AREA_H-20)));
 	}
 
@@ -247,7 +232,8 @@ bool update() {
 	}
 	return true;
 }
-void render() {
+void render()
+{
 	std::stringstream ss;
 	std::deque<Point> trails, vertices;
 	window->clear();
@@ -256,10 +242,10 @@ void render() {
 	sf::Color color(sf::Color::Red);
 	sf::ConvexShape tail;
 	tail.setFillColor(sf::Color(128,0,0,128));
-	for(auto& creature:creatures){
+	for(auto& creature:creatures) {
 		window->draw(*creature);
 	}
-	for(auto& f:food){
+	for(auto& f:food) {
 		fToken->setPosition(f);
 		window->draw(*fToken);
 	}
@@ -269,15 +255,19 @@ void render() {
 	text->setString(ss.str());
 	window->setView(window->getDefaultView());
 	window->draw(*text);
-	ss.str("");
-	ss << "FPS: " << (int)1000.f/frameclock.restart().asMilliseconds();
-	text->setString(ss.str());
-	text->move(0,text->getLocalBounds().height);
-	window->draw(*text);
+	if(frameclock.getElapsedTime().asMilliseconds()>0) {
+		ss.str("");
+		ss << "FPS: " << (int)1000.f/frameclock.restart().asMilliseconds();
+		text->setString(ss.str());
+		text->move(0,text->getLocalBounds().height);
+		window->draw(*text);
+	}
+
 	window->display();
 }
 
-int stringPopulation() {
+int stringPopulation()
+{
 	Population pop;
 	pop.setTarget(55.5);
 	bool found = false;
