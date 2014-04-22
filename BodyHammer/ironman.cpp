@@ -32,9 +32,11 @@ sf::Clock beholder_speed;
 sf::Image data;
 sf::View input_camera;
 sf::View log_camera;
+sf::View message_camera;
 sf::Font font;
 sf::Vector2f logstart;
 std::deque<sf::Text> log_output;
+sf::Text message;
 Beholder* beholder;
 int fcnt,evolution_rate,increase_mutations, decrease_mutations,training_iters;
 double speed, pavg, avg, current_mutation_rate,desired_error;
@@ -49,7 +51,8 @@ int main(int argc, char** argv)
 	window.setFramerateLimit(60);
 
 
-	input_camera.setViewport(sf::FloatRect(0.f,0.f,0.5f,1.f));
+	input_camera.setViewport(sf::FloatRect(0.f,0.f,0.5f,0.75f));
+	message_camera.setViewport(sf::FloatRect(0.f,0.75f,0.5f,0.25f));
 	log_camera.setViewport(sf::FloatRect(0.5f,0,0.5,1.f));
 
 
@@ -60,7 +63,8 @@ int main(int argc, char** argv)
 	beholder = new Beholder(X_RES,Y_RES,4,2,(X_RES*Y_RES)/2);
 
 	font.loadFromFile("revalia.ttf");
-
+	message = sf::Text("Draw Something!",font);
+	message.setPosition(1000,1000);
 	if(IMAGE_DATA) {
 		if(!data.loadFromFile("numbers.png")) {
 			std::cout << "error loading image data!\n";
@@ -149,47 +153,69 @@ int main(int argc, char** argv)
 	lpos.x -= log_camera.getSize().x/2;
 	lpos.y -= log_camera.getSize().y/2;
 	logstart = lpos;
+	auto messagepos = message.getGlobalBounds();
+	message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
+	message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));
 	beholder_speed.restart();
 	while(update())render();
 	return 0;
 }
 void exportBrains(){
 	if(beholder!=nullptr){
-		std::fstream brains_out("saved.brains");
+
+		log("Exporting brains...");
+		std::ofstream brains_out;
+		brains_out.open("saved.txt");
+		if(brains_out){
 		std::stringstream ss;
+		std::vector<std::string> genestrings;
 		auto brains = beholder->buildGenebase();
+		std::cout <<  brains.size();
 		for(auto& a:brains){
 			ss << a << '\n';
 			auto str = ss.str();
-			brains_out.write(str.c_str(),str.size());
+			//brains_out.write(str.c_str(),str.size());
+			genestrings.push_back(ss.str());
 		}
+		ss.str("");
+		ss << "Saved brains to file, file size is " << genestrings.size() << " lines";
+		log(ss.str());
+		}else{
+			log("Error saving brains to file");
+		}
+		brains_out.close();
 	}
 }
 
 void importBrains(){
 	if(beholder!=nullptr){
-		std::fstream brains_in("saved.brains");
-		char buffer[256];
-		std::vector<double> brains;
-		while(brains_in.getline(buffer,256)){
-			double w = strtod(buffer,0);
-			brains.push_back(w);
+		log("Importing brains...");
+		std::ifstream brains_in("saved.txt");
+		if(brains_in){
+			char buffer[256];
+			std::vector<double> brains;
+			while(brains_in.getline(buffer,256)){
+				double w = strtod(buffer,0);
+				brains.push_back(w);
+			}
+			Genome g(brains);
+			beholder->format(g);
+			log("Loaded brains from file");
+		}else{
+			log("Error loading brains from file");
 		}
-		Genome g(brains);
-		beholder->format(g);
+		brains_in.close();
 	}
 }
 void train()
 {
 
 	long iter = 0;
-	int lc = 0;
 	std::stringstream ss;
 	std::vector<double> errors;
-	errors.reserve(51);
-	double error_avg = 9999.9;
-	double prev_error = error_avg;
-	log("training...\n");
+	errors.reserve(found_sets.size());
+	double error_avg = 9999.9,prev_error = error_avg;
+	message.setString("Training the Beholder...\n");
 	while(iter<training_iters) {
 		for(char ch:found_sets) {
 			beholder->train(training_set[ch].at(0),ch);
@@ -209,7 +235,7 @@ void train()
 		}
 		iter++;
 	}
-	log("Training done!");
+	message.setString("Training done!");
 
 }
 void log(std::string output){
@@ -240,13 +266,13 @@ bool update()
 			case sf::Keyboard::S:
 				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
 					exportBrains();
-					log("Saved brains to file");
+					
 				}
 				break;
 			case sf::Keyboard::L:
 				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
 					importBrains();
-					log("Loaded brains from file");
+					
 				}
 				break;
 			case sf::Keyboard::F1:
@@ -254,16 +280,8 @@ bool update()
 					a.setFillColor(sf::Color::White);
 				}
 				break;
-			case sf::Keyboard::F2:
-				ans = beholder->analyze(input_grid);
-				ss.str("");
-				ss << "The Beholder sees a: " << ans;
-
-				log(ss.str());
-				break;
 			case sf::Keyboard::F3:
 				training = !training;
-
 				ss.str("");
 				ss << "Mode: ";
 				if(training) {
@@ -274,7 +292,6 @@ bool update()
 				log(ss.str());
 				break;
 			case sf::Keyboard::F5:
-				log("Training the beholder...");
 				train();
 				break;
 			case sf::Keyboard::F9:
@@ -371,7 +388,7 @@ bool update()
 		}
 	}
 	auto now = beholder_speed.getElapsedTime();
-	if(now>sf::seconds(2)) {
+	if(now>sf::milliseconds(250)) {
 		ans = beholder->analyze(input_grid);
 		std::stringstream ss;
 		ss << "The Beholder sees a: ";
@@ -383,7 +400,10 @@ bool update()
 			ss << ans;
 		}
 
-		log(ss.str());
+		message.setString(ss.str());
+		auto messagepos = message.getGlobalBounds();
+		message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
+		message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));;
 		beholder_speed.restart();
 	}
 
@@ -400,5 +420,7 @@ void render()
 	for(auto& a:log_output) {
 		window.draw(a);
 	}
+	window.setView(message_camera);
+	window.draw(message);
 	window.display();
 }

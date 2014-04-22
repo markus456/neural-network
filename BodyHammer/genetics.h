@@ -156,9 +156,12 @@ public:
 	}
 	void format(std::list<double>& new_w)
 	{
-		for(int i = 0; i<weights.size(); i++) {
-			weights[i] = new_w.front();
-			new_w.pop_front();
+		if(new_w.size()==weights.size())
+		{
+			for(int i = 0; i<weights.size(); i++) {
+				weights[i] = new_w.front();
+				new_w.pop_front();
+			}
 		}
 	}
 	double output(std::vector<double>& inputs)
@@ -322,15 +325,15 @@ protected:
 public:
 	///Number of pixels in inputs and number of output bits, number neuron layers and the neuron count for each layer.
 	Beholder(int ccount, int rcount, unsigned int obits, int lrs, int nrns):Brain(ccount*rcount,obits,lrs,nrns), columns(ccount),rows(rcount),outputs(obits),learning_rate(0.1),base_rate(0.01) {}
-    virtual void train(std::vector<double> inputs,char exp)
+	virtual void train(std::vector<double> inputs,char exp)
 	{
-        auto values = inputs;
-        int xp = strtol(&exp,0,0);
-        if(exp=='9'+1){
-            xp = 10;
-        }else if(exp=='9'+2){
-            xp = 11;
-        }
+		auto values = inputs;
+		int xp = strtol(&exp,0,0);
+		if(exp=='9'+1){
+			xp = 10;
+		}else if(exp=='9'+2){
+			xp = 11;
+		}
 		int answer = analyze(values);
 		std::vector<double> deltas;
 		for(int i = 0; i<outputs; i++) {
@@ -388,7 +391,7 @@ public:
 			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
 		}
 		if(learning_rate>base_rate){
-            learning_rate *= 0.9;
+			learning_rate *= 0.9;
 		}
 	}
 	virtual void train(std::vector<sf::RectangleShape>& inputs,char exp)
@@ -453,25 +456,25 @@ public:
 			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
 		}
 		if(learning_rate>base_rate){
-            learning_rate *= 0.9;
+			learning_rate *= 0.9;
 		}
 	}
 	void increaseLearningRate(){
-        learning_rate *= 1.15;
+		learning_rate *= 1.15;
 	}
 	void decreaseLearningRate(){
-	    if(learning_rate>base_rate){
-            learning_rate = base_rate;
-	    }else{
-            learning_rate *= 0.85;
-	    }
+		if(learning_rate>base_rate){
+			learning_rate = base_rate;
+		}else{
+			learning_rate *= 0.85;
+		}
 	}
 	double getGlobalError()
 	{
 		return global_error;
 	}
 	virtual int analyze(std::vector<double>& inputs){
-	if(inputs.size()==columns*rows) {
+		if(inputs.size()==columns*rows) {
 			auto outs = Brain::update(inputs);
 			int result = 0;
 			for(int i = 0; i<outs.size(); i++) {
@@ -509,66 +512,66 @@ public:
 };
 template <typename T> class DataSet{
 protected:
-    std::vector<T> values;
-    std::vector<unsigned int> indices;
+	std::vector<T> values;
+	std::vector<unsigned int> indices;
 public:
-    void clear(){
-    values.clear();
-    indices.clear();
-    }
-    void reserve(unsigned int x, unsigned int y){
-        values.reserve(x*y);
-        indices.reserve(y);
-    }
-    unsigned int rows(){
-        return indices.size();
-    }
-    unsigned int columns(unsigned int row){
-        if(row<indices.size()-1){
-            return indices[row+1] - indices[row];
-        }else if(row<indices.size()){
-            return indices[row] - indices[row-1];
-        }
-    }
+	void clear(){
+		values.clear();
+		indices.clear();
+	}
+	void reserve(unsigned int x, unsigned int y){
+		values.reserve(x*y);
+		indices.reserve(y);
+	}
+	unsigned int rows(){
+		return indices.size();
+	}
+	unsigned int columns(unsigned int row){
+		if(row<indices.size()-1){
+			return indices[row+1] - indices[row];
+		}else if(row<indices.size()){
+			return indices[row] - indices[row-1];
+		}
+	}
 
-    std::vector<T> at(unsigned int y){
-        std::vector<T> row;
-        if(y<indices.size()-1){
-            row.assign(values.begin()+indices[y],values.begin()+indices[y+1]);
-        }else if(y<indices.size()){
-            row.assign(values.begin()+indices[y],values.end());
-        }
-        return row;
-    }
-    T& at(unsigned int x, unsigned int y){
-        if(y<indices.size()-1){
-            if(x<indices[y+1]-indices[y]){
-                return values[indices[y]+x];
-            }
-        }else if(y<indices.size()){
-            if(x+indices[y]<values.size()){
-                return values[indices[y]+x];
-        }
-    }
-        return T();
-    }
-    void push_row(std::vector<T> row){
-    indices.push_back(values.size());
-    values.insert(values.end(),row.begin(),row.end());
-    }
-    void push_back(T cell){
-    values.push_back(cell);
-    }
-    void new_row(){
-        indices.push_back(values.size());
-    }
-    void pop_back(){
-        values.pop_back();
-    }
-    void pop_row(){
-        values.erase(values.begin()+indices.back(),values.end());
-        indices.pop_back();
-    }
+	std::vector<T> at(unsigned int y){
+		std::vector<T> row;
+		if(y<indices.size()-1){
+			row.assign(values.begin()+indices[y],values.begin()+indices[y+1]);
+		}else if(y<indices.size()){
+			row.assign(values.begin()+indices[y],values.end());
+		}
+		return row;
+	}
+	T& at(unsigned int x, unsigned int y){
+		if(y<indices.size()-1){
+			if(x<indices[y+1]-indices[y]){
+				return values[indices[y]+x];
+			}
+		}else if(y<indices.size()){
+			if(x+indices[y]<values.size()){
+				return values[indices[y]+x];
+			}
+		}
+		return T();
+	}
+	void push_row(std::vector<T> row){
+		indices.push_back(values.size());
+		values.insert(values.end(),row.begin(),row.end());
+	}
+	void push_back(T cell){
+		values.push_back(cell);
+	}
+	void new_row(){
+		indices.push_back(values.size());
+	}
+	void pop_back(){
+		values.pop_back();
+	}
+	void pop_row(){
+		values.erase(values.begin()+indices.back(),values.end());
+		indices.pop_back();
+	}
 };
 
 #endif
