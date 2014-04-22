@@ -172,14 +172,11 @@ void exportBrains(){
 		auto brains = beholder->buildGenebase();
 		std::cout <<  brains.size();
 		for(auto& a:brains){
+            ss.str("");
 			ss << a << '\n';
-			auto str = ss.str();
-			//brains_out.write(str.c_str(),str.size());
-			genestrings.push_back(ss.str());
+			brains_out << ss.str();
 		}
-		ss.str("");
-		ss << "Saved brains to file, file size is " << genestrings.size() << " lines";
-		log(ss.str());
+		log( "Saved brains to file");
 		}else{
 			log("Error saving brains to file");
 		}
@@ -193,13 +190,12 @@ void importBrains(){
 		std::ifstream brains_in("saved.txt");
 		if(brains_in){
 			char buffer[256];
-			std::vector<double> brains;
+			std::list<double> brains;
 			while(brains_in.getline(buffer,256)){
 				double w = strtod(buffer,0);
 				brains.push_back(w);
 			}
-			Genome g(brains);
-			beholder->format(g);
+			beholder->format(brains);
 			log("Loaded brains from file");
 		}else{
 			log("Error loading brains from file");
@@ -209,18 +205,25 @@ void importBrains(){
 }
 void train()
 {
-
 	long iter = 0;
+	char hardest = '0';
+	double error_avg = 9999.9,prev_error = error_avg,hardest_error = 0.0;
 	std::stringstream ss;
 	std::vector<double> errors;
 	errors.reserve(found_sets.size());
-	double error_avg = 9999.9,prev_error = error_avg;
 	message.setString("Training the Beholder...\n");
 	while(iter<training_iters) {
+        hardest_error = 0.0;
 		for(char ch:found_sets) {
 			beholder->train(training_set[ch].at(0),ch);
 			errors.push_back(beholder->getGlobalError());
+            if(errors.back()>hardest_error){
+                hardest_error = errors.back();
+                hardest = ch;
+            }
 		}
+		beholder->train(training_set[hardest].at(0),hardest);
+		errors.push_back(beholder->getGlobalError());
 		error_avg = 0.0;
 		for(double d:errors) {
 			error_avg += d;
@@ -241,7 +244,7 @@ void train()
 void log(std::string output){
 	log_output.push_front(sf::Text(output,font,15));
 	float ypos = logstart.y;
-	for(auto& a = log_output.begin();a!=log_output.end();a++){
+	for(auto a = log_output.begin();a!=log_output.end();a++){
 		(*a).setPosition(0,ypos);
 		ypos += (*a).getLocalBounds().height;
 		if(ypos - logstart.y>log_camera.getSize().y){
@@ -266,13 +269,13 @@ bool update()
 			case sf::Keyboard::S:
 				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
 					exportBrains();
-					
+
 				}
 				break;
 			case sf::Keyboard::L:
 				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
 					importBrains();
-					
+
 				}
 				break;
 			case sf::Keyboard::F1:

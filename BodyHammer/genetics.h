@@ -156,12 +156,9 @@ public:
 	}
 	void format(std::list<double>& new_w)
 	{
-		if(new_w.size()==weights.size())
-		{
-			for(int i = 0; i<weights.size(); i++) {
-				weights[i] = new_w.front();
-				new_w.pop_front();
-			}
+		for(int i = 0; i<weights.size(); i++) {
+			weights[i] = new_w.front();
+			new_w.pop_front();
 		}
 	}
 	double output(std::vector<double>& inputs)
@@ -329,9 +326,9 @@ public:
 	{
 		auto values = inputs;
 		int xp = strtol(&exp,0,0);
-		if(exp=='9'+1){
+		if(exp=='9'+1) {
 			xp = 10;
-		}else if(exp=='9'+2){
+		} else if(exp=='9'+2) {
 			xp = 11;
 		}
 		int answer = analyze(values);
@@ -390,7 +387,7 @@ public:
 		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
 			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
 		}
-		if(learning_rate>base_rate){
+		if(learning_rate>base_rate) {
 			learning_rate *= 0.9;
 		}
 	}
@@ -455,17 +452,19 @@ public:
 		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
 			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
 		}
-		if(learning_rate>base_rate){
+		if(learning_rate>base_rate) {
 			learning_rate *= 0.9;
 		}
 	}
-	void increaseLearningRate(){
+	void increaseLearningRate()
+	{
 		learning_rate *= 1.15;
 	}
-	void decreaseLearningRate(){
-		if(learning_rate>base_rate){
+	void decreaseLearningRate()
+	{
+		if(learning_rate>base_rate) {
 			learning_rate = base_rate;
-		}else{
+		} else {
 			learning_rate *= 0.85;
 		}
 	}
@@ -473,7 +472,8 @@ public:
 	{
 		return global_error;
 	}
-	virtual int analyze(std::vector<double>& inputs){
+	virtual int analyze(std::vector<double>& inputs)
+	{
 		if(inputs.size()==columns*rows) {
 			auto outs = Brain::update(inputs);
 			int result = 0;
@@ -510,65 +510,76 @@ public:
 		return -1;
 	}
 };
-template <typename T> class DataSet{
+template <typename T> class DataSet {
 protected:
 	std::vector<T> values;
 	std::vector<unsigned int> indices;
 public:
-	void clear(){
+	void clear()
+	{
 		values.clear();
 		indices.clear();
 	}
-	void reserve(unsigned int x, unsigned int y){
+	void reserve(unsigned int x, unsigned int y)
+	{
 		values.reserve(x*y);
 		indices.reserve(y);
 	}
-	unsigned int rows(){
+	unsigned int rows()
+	{
 		return indices.size();
 	}
-	unsigned int columns(unsigned int row){
-		if(row<indices.size()-1){
+	unsigned int columns(unsigned int row)
+	{
+		if(row<indices.size()-1) {
 			return indices[row+1] - indices[row];
-		}else if(row<indices.size()){
+		} else if(row<indices.size()) {
 			return indices[row] - indices[row-1];
 		}
 	}
 
-	std::vector<T> at(unsigned int y){
+	std::vector<T> at(unsigned int y)
+	{
 		std::vector<T> row;
-		if(y<indices.size()-1){
+		if(y<indices.size()-1) {
 			row.assign(values.begin()+indices[y],values.begin()+indices[y+1]);
-		}else if(y<indices.size()){
+		} else if(y<indices.size()) {
 			row.assign(values.begin()+indices[y],values.end());
 		}
 		return row;
 	}
-	T& at(unsigned int x, unsigned int y){
-		if(y<indices.size()-1){
-			if(x<indices[y+1]-indices[y]){
+	T& at(unsigned int x, unsigned int y)
+	{
+		if(y<indices.size()-1) {
+			if(x<indices[y+1]-indices[y]) {
 				return values[indices[y]+x];
 			}
-		}else if(y<indices.size()){
-			if(x+indices[y]<values.size()){
+		} else if(y<indices.size()) {
+			if(x+indices[y]<values.size()) {
 				return values[indices[y]+x];
 			}
 		}
 		return T();
 	}
-	void push_row(std::vector<T> row){
+	void push_row(std::vector<T> row)
+	{
 		indices.push_back(values.size());
 		values.insert(values.end(),row.begin(),row.end());
 	}
-	void push_back(T cell){
+	void push_back(T cell)
+	{
 		values.push_back(cell);
 	}
-	void new_row(){
+	void new_row()
+	{
 		indices.push_back(values.size());
 	}
-	void pop_back(){
+	void pop_back()
+	{
 		values.pop_back();
 	}
-	void pop_row(){
+	void pop_row()
+	{
 		values.erase(values.begin()+indices.back(),values.end());
 		indices.pop_back();
 	}
