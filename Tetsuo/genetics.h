@@ -113,6 +113,7 @@ class Genome {
 protected:
 	std::string dna;
 	std::vector<double> dna_values;
+	std::vector<double> additional_values;
 	double genomeFitness;
 public:
 
@@ -128,6 +129,14 @@ public:
 	{
 		genomeFitness = 1;
 		dna_values = genome.dna_values;
+		additional_values = genome.additional_values;
+		dna = genome.dna;
+	}
+	Genome(Genome&& genome)
+	{
+		genomeFitness = 1;
+		dna_values = std::move(genome.dna_values);
+		additional_values = std::move(genome.additional_values);
 		dna = genome.dna;
 	}
 	Genome(unsigned int init):dna("Genome")
@@ -148,6 +157,15 @@ public:
 	{
 		return dna_values;
 	}
+	std::vector<double> getExtras() const
+	{
+		return additional_values;
+	}
+	void setExtras(std::vector<double> vals)
+	{
+		additional_values = std::move(vals);
+	}
+
 	std::string get()const
 	{
 		return dna;
@@ -178,6 +196,14 @@ public:
 		dna = g.dna;
 		genomeFitness = g.genomeFitness;
 		dna_values = g.getData();
+		return *this;
+	}
+	Genome& operator=(Genome&& g)
+	{
+		dna = g.dna;
+		genomeFitness = g.genomeFitness;
+		dna_values = std::move(g.dna_values);
+		additional_values = std::move(g.additional_values);
 		return *this;
 	}
 	double fitness()const
@@ -476,6 +502,48 @@ public:
 		g1.fitness(af);
 		Genome g2(c2);
 		g2.fitness(af);
+
+
+		if(rand() % 100 < GenParams::CROSSOVER) {
+			c1.clear();
+			c2.clear();
+			for(int i = 0;i<a.getExtras().size();i++){
+				if(rand() % 2){
+					c1.push_back(a.getExtras()[i]);
+					c2.push_back(b.getExtras()[i]);
+				}else{
+					c1.push_back(b.getExtras()[i]);
+					c2.push_back(a.getExtras()[i]);
+				}
+			}
+			
+		} else {
+			c1 = a.getExtras();
+			c2 = b.getExtras();
+		}
+
+			if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
+				double rnd = (double)rnum_gen()/(double)rnum_gen.max();
+				int pos1 = rand() % c1.size();
+				int pos2 = rand() % c1.size();
+				double sum = c1[pos1]+c1[pos2];
+				c1[pos1] = rnd*sum;
+				sum -= c1[pos1];
+				c1[pos2] = sum;
+			}
+			if(rand() % 100< GenParams::MUTATION_PROBABILITY) {
+				double rnd = (double)rnum_gen()/(double)rnum_gen.max();
+				int pos1 = rand() % c2.size();
+				int pos2 = rand() % c2.size();
+				double sum = c2[pos1]+c2[pos2];
+				c2[pos1] = rnd*sum;
+				sum -= c2[pos1];
+				c2[pos2] = sum;
+				
+			}
+
+		g1.setExtras(c1);
+		g2.setExtras(c2);
 		nextgen.push_back(g1);
 		nextgen.push_back(g2);
 	}
@@ -712,6 +780,7 @@ protected:
 	Genome dna;
 	VectorPopulation gene_evolution;
 	std::unique_ptr<Brain> b;
+	std::vector<sf::RectangleShape> tendrils;
 	int n_inputs, n_outputs,neuron_count,layer_count;
 	std::vector<double> output;
 	std::vector<sf::Vertex> trail;
@@ -736,6 +805,21 @@ public:
 		std::vector<double> vals;
 		vals.assign(a.begin(),a.end());
 		dna = Genome(vals);
+		std::vector<double> extras;
+		double initial = 50.f;
+		extras.push_back(((double)(rand() % RAND_MAX) /(double) RAND_MAX)*initial);
+		initial -= extras.back();
+		extras.push_back(initial);
+		tendrils.push_back(sf::RectangleShape(sf::Vector2f(extras[0],2)));
+		tendrils.back().setFillColor(sf::Color::Magenta);
+		tendrils.back().setPosition(body.getPosition());
+		tendrils.back().setRotation(90);
+		tendrils.push_back(sf::RectangleShape(sf::Vector2f(extras[1],2)));
+		tendrils.back().setFillColor(sf::Color::Magenta);
+		tendrils.back().setPosition(body.getPosition());
+		tendrils.back().setRotation(-90);
+
+		dna.setExtras(extras);
 		setDNA(dna);
 	}
 	Creature(const Creature& c)
@@ -761,8 +845,18 @@ public:
 	}
 	void draw(sf::RenderTarget& target, sf::RenderStates states)const
 	{
-		target.draw(&trail[0],trail.size(),sf::LinesStrip,states);
+		if(trail.size()>0){
+			target.draw(&trail[0],trail.size(),sf::LinesStrip,states);
+		}
+		for(auto& a:tendrils){
+			target.draw(a,states);
+		}
 		target.draw(body);
+
+	}
+	std::vector<sf::RectangleShape>& getTendrils()
+	{
+		return tendrils;
 	}
 	void foodAt(int x_,int y_)
 	{
@@ -825,6 +919,7 @@ public:
 		input.push_back(nty);
 		input.push_back(nx);
 		input.push_back(ny);
+
 		output = b->update(input);
 		l_leg = output[0];
 		r_leg = output[1];
@@ -836,25 +931,33 @@ public:
 		velocity.x = cos(angle)*turnrate*speed;
 		velocity.y = -sin(angle)*turnrate*speed;
 		auto tpos = pos+velocity;
-            if(tpos.x>sizex){
-                pos.x = 0;
-            }else if(tpos.x<0){
-                pos.x = sizex;
-            }
-             if(tpos.y>sizey){
-                pos.y = 0;
-            }else if(tpos.y<0){
-                pos.y = sizey;
-            }
-        body.setPosition(pos);
+		if(tpos.x>sizex){
+			pos.x = 0;
+		}else if(tpos.x<0){
+			pos.x = sizex;
+		}
+		if(tpos.y>sizey){
+			pos.y = 0;
+		}else if(tpos.y<0){
+			pos.y = sizey;
+		}
+		body.setPosition(pos);
 		body.move(velocity);
 		body.setRotation(asDeg(-angle));
+
+		for(auto& a:tendrils){
+			a.setPosition(body.getPosition());
+		}
+
+		tendrils[0].setRotation(asDeg(-angle)+90);
+		tendrils[1].setRotation(asDeg(-angle)-90);
+
 		sf::Vertex vr;
 		for(auto a = trail.begin();a!=trail.end();a++){
-            if(distance((*a).position,trail.front().position)>trail.size()*20){
-                trail.clear();
-                break;
-            }
+			if(distance((*a).position,trail.front().position)>trail.size()*20){
+				trail.clear();
+				break;
+			}
 		}
 
 	}
