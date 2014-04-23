@@ -160,44 +160,46 @@ int main(int argc, char** argv)
 	while(update())render();
 	return 0;
 }
-void exportBrains(){
-	if(beholder!=nullptr){
+void exportBrains()
+{
+	if(beholder!=nullptr) {
 
 		log("Exporting brains...");
 		std::ofstream brains_out;
 		brains_out.open("saved.txt");
-		if(brains_out){
-		std::stringstream ss;
-		std::vector<std::string> genestrings;
-		auto brains = beholder->buildGenebase();
-		std::cout <<  brains.size();
-		for(auto& a:brains){
-            ss.str("");
-			ss << a << '\n';
-			brains_out << ss.str();
-		}
-		log( "Saved brains to file");
-		}else{
+		if(brains_out) {
+			std::stringstream ss;
+			std::vector<std::string> genestrings;
+			auto brains = beholder->buildGenebase();
+			std::cout <<  brains.size();
+			for(auto& a:brains) {
+				ss.str("");
+				ss << a << '\n';
+				brains_out << ss.str();
+			}
+			log( "Saved brains to file");
+		} else {
 			log("Error saving brains to file");
 		}
 		brains_out.close();
 	}
 }
 
-void importBrains(){
-	if(beholder!=nullptr){
+void importBrains()
+{
+	if(beholder!=nullptr) {
 		log("Importing brains...");
 		std::ifstream brains_in("saved.txt");
-		if(brains_in){
+		if(brains_in) {
 			char buffer[256];
 			std::list<double> brains;
-			while(brains_in.getline(buffer,256)){
+			while(brains_in.getline(buffer,256)) {
 				double w = strtod(buffer,0);
 				brains.push_back(w);
 			}
 			beholder->format(brains);
 			log("Loaded brains from file");
-		}else{
+		} else {
 			log("Error loading brains from file");
 		}
 		brains_in.close();
@@ -213,14 +215,14 @@ void train()
 	errors.reserve(found_sets.size());
 	message.setString("Training the Beholder...\n");
 	while(iter<training_iters) {
-        hardest_error = 0.0;
+		hardest_error = 0.0;
 		for(char ch:found_sets) {
 			beholder->train(training_set[ch].at(0),ch);
 			errors.push_back(beholder->getGlobalError());
-            if(errors.back()>hardest_error){
-                hardest_error = errors.back();
-                hardest = ch;
-            }
+			if(errors.back()>hardest_error) {
+				hardest_error = errors.back();
+				hardest = ch;
+			}
 		}
 		beholder->train(training_set[hardest].at(0),hardest);
 		errors.push_back(beholder->getGlobalError());
@@ -241,13 +243,14 @@ void train()
 	message.setString("Training done!");
 
 }
-void log(std::string output){
+void log(std::string output)
+{
 	log_output.push_front(sf::Text(output,font,15));
 	float ypos = logstart.y;
-	for(auto a = log_output.begin();a!=log_output.end();a++){
+	for(auto a = log_output.begin(); a!=log_output.end(); a++) {
 		(*a).setPosition(0,ypos);
 		ypos += (*a).getLocalBounds().height;
-		if(ypos - logstart.y>log_camera.getSize().y){
+		if(ypos - logstart.y>log_camera.getSize().y) {
 			log_output.erase(a,log_output.end());
 			return;
 		}
@@ -265,15 +268,15 @@ bool update()
 		case sf::Event::Closed:
 			return false;
 		case sf::Event::KeyPressed:
-			switch(event.key.code){
+			switch(event.key.code) {
 			case sf::Keyboard::S:
-				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
+				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
 					exportBrains();
 
 				}
 				break;
 			case sf::Keyboard::L:
-				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)){
+				if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
 					importBrains();
 
 				}
@@ -285,7 +288,6 @@ bool update()
 				break;
 			case sf::Keyboard::F3:
 				training = !training;
-				ss.str("");
 				ss << "Mode: ";
 				if(training) {
 					ss << "network training";
@@ -305,9 +307,7 @@ bool update()
 				log(ss.str());
 				break;
 			case sf::Keyboard::F10:
-				if(training_iters>5){
-
-					ss.str("");
+				if(training_iters>5) {
 					training_iters -= 5;
 					ss << "Training iteration set to: " << training_iters << std::endl;
 					log(ss.str());
@@ -369,45 +369,48 @@ bool update()
 				}
 			}
 			break;
-		case sf::Event::MouseMoved:
-			auto mp = window.mapPixelToCoords(sf::Mouse::getPosition(window),input_camera);
-			if(sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
-				for(auto& a:input_grid) {
-					if(a.getGlobalBounds().contains(mp)) {
-						a.setFillColor(sf::Color::Black);
-						break;
-					}
-				}
-			}
-			if(sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
-				for(auto& a:input_grid) {
-					if(a.getGlobalBounds().contains(mp)) {
-						a.setFillColor(sf::Color::White);
-						break;
-					}
-				}
-			}
-			break;
 		}
 	}
+
+	auto mp = window.mapPixelToCoords(sf::Mouse::getPosition(window),input_camera);
+	if(sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+		for(auto& a:input_grid) {
+			if(a.getGlobalBounds().contains(mp)) {
+				a.setFillColor(sf::Color::Black);
+				break;
+			}
+		}
+	}
+	if(sf::Mouse::isButtonPressed(sf::Mouse::Right)) {
+		for(auto& a:input_grid) {
+			if(a.getGlobalBounds().contains(mp)) {
+				a.setFillColor(sf::Color::White);
+				break;
+			}
+		}
+	}
+
 	auto now = beholder_speed.getElapsedTime();
 	if(now>sf::milliseconds(250)) {
 		ans = beholder->analyze(input_grid);
 		std::stringstream ss;
 		ss << "The Beholder sees a: ";
-		if(ans==10){
+		if(ans==10) {
 			ss << '+';
-		}else if(ans==11){
+		} else if(ans==11) {
 			ss << '-';
-		}else{
+		} else {
 			ss << ans;
 		}
 
 		message.setString(ss.str());
-		auto messagepos = message.getGlobalBounds();
-		message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
-		message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));;
 		beholder_speed.restart();
+
+		if(message.getLocalBounds().width>message_camera.getSize().x) {
+			auto messagepos = message.getGlobalBounds();
+			message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
+			message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));
+		}
 	}
 
 	return true;
@@ -415,15 +418,19 @@ bool update()
 void render()
 {
 	window.clear();
+
 	window.setView(input_camera);
 	for(auto& a:input_grid) {
 		window.draw(a);
 	}
+
 	window.setView(log_camera);
 	for(auto& a:log_output) {
 		window.draw(a);
 	}
+
 	window.setView(message_camera);
 	window.draw(message);
+
 	window.display();
 }

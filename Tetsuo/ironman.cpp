@@ -45,12 +45,17 @@ void fastForward(int fgens)
 			creature->foodPool(food);
 			creature->update();
 			for(auto fd = food.begin(); fd<food.end(); fd++) {
-				if(distance(creature->getPos(),*fd)<15) {
-					fd = food.erase(fd);
-					creature->increaseFitness(1.f);
+				fToken->setPosition((*fd));
+				for(auto& a:creature->getTendrils()){
+					if(fd<food.end()&&fToken->getGlobalBounds().intersects(a.getGlobalBounds())) {
+						fd = food.erase(fd);
+						creature->increaseFitness(1.f);
+					}
+				}
+				if(fd>=food.end()){
+					break;
 				}
 			}
-
 		}
 
 		while(food.size()<FOOD_CAP) {
@@ -199,11 +204,17 @@ bool update()
 		creature->foodPool(food);
 		creature->update();
 		for(auto fd = food.begin(); fd<food.end(); fd++) {
-			if(distance(creature->getPos(),*fd)<15) {
-				fd = food.erase(fd);
-				creature->increaseFitness(1.f);
+				fToken->setPosition((*fd));
+				for(auto& a:creature->getTendrils()){
+					if(fd<food.end()&&fToken->getGlobalBounds().intersects(a.getGlobalBounds())) {
+						fd = food.erase(fd);
+						creature->increaseFitness(1.f);
+					}
+				}
+				if(fd>=food.end()){
+					break;
+				}
 			}
-		}
 		avg += creature->getFitness();
 		if(creature->getFitness()>ftest) {
 			ftest = creature->getFitness();
