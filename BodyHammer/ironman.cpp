@@ -34,10 +34,13 @@ sf::View input_camera;
 sf::View log_camera;
 sf::View message_camera;
 sf::Font font;
+sf::String kb_char;
+sf::Text printer(sf::String(),font);
 sf::Vector2f logstart;
 std::deque<sf::Text> log_output;
 sf::Text message;
 Beholder* beholder;
+Trainer* trainer;
 int fcnt,evolution_rate,increase_mutations, decrease_mutations,training_iters;
 double speed, pavg, avg, current_mutation_rate,desired_error;
 int counter, gen;
@@ -60,8 +63,10 @@ int main(int argc, char** argv)
 	training = true;
 	desired_error = 0.1;
 
-	beholder = new Beholder(X_RES,Y_RES,4,2,(X_RES*Y_RES)/2);
-
+	beholder = new Beholder(X_RES,Y_RES,7,2,(X_RES*Y_RES)/2);
+	trainer = new Trainer("revalia.ttf");
+	trainer->prepareData();
+	trainer->assingStudent(beholder);
 	font.loadFromFile("revalia.ttf");
 	message = sf::Text("Draw Something!",font);
 	message.setPosition(1000,1000);
@@ -265,6 +270,7 @@ bool update()
 	sf::String tmp;
 	while(window.pollEvent(event)) {
 		std::stringstream ss;
+		std::vector<double> board;
 		switch (event.type) {
 		case sf::Event::Closed:
 			return false;
@@ -287,6 +293,22 @@ bool update()
 					a.setFillColor(sf::Color::White);
 				}
 				break;
+			case sf::Keyboard::F2:
+				for(auto& a:input_grid) {
+					if(a.getFillColor()== sf::Color::Black) {
+						board.push_back(1.0);
+					} else {
+						board.push_back(0.0);
+					}
+				}
+				message.setString(sf::String((char)beholder->analyze(board)));
+
+				if(message.getLocalBounds().width>message_camera.getSize().x) {
+					auto messagepos = message.getGlobalBounds();
+					message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
+					message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));
+				}
+				break;
 			case sf::Keyboard::F3:
 				training = !training;
 				ss << "Mode: ";
@@ -298,7 +320,10 @@ bool update()
 				log(ss.str());
 				break;
 			case sf::Keyboard::F5:
-				train();
+				for(int i = 0;i<25;i++)trainer->train();
+				ss <<  "Error: " << trainer->globalError();
+				log("Beholder trained 25 times");
+				log(ss.str());
 				break;
 			case sf::Keyboard::F9:
 
@@ -318,57 +343,9 @@ bool update()
 			}
 			break;
 		case sf::Event::TextEntered:
-			if(IMAGE_DATA) {
-				tmp = event.text.unicode;
-				char c = tmp.toAnsiString()[0];
-				if(c=='+') {
-					c = '9'+1;
-				} else if(c=='-') {
-					c = '9'+2;
-				}
-				if(training_set.count(c)) {
-					auto datarow = training_set[c].at(0);
-					int i = 0;
-					for(auto& a:input_grid) {
-						if(datarow[i]==1.0) {
-							a.setFillColor(sf::Color::Black);
-						} else {
-							a.setFillColor(sf::Color::White);
-						}
-						i++;
-					}
-				}
-			} else {
-				if(training) {
-					tmp = event.text.unicode;
-					beholder->train(input_grid,tmp.toAnsiString()[0]);
-					ss << "The Beholder is trained with: " << tmp.toAnsiString() << " Global error: " << beholder->getGlobalError();
-					log_output.push_front(sf::Text(sf::String(ss.str()),font,15));
-				} else {
-					tmp = event.text.unicode;
-					ss << tmp.toAnsiString() << ".txt";
-					std::string fpath = ss.str();
-					std::fstream foutput(fpath.c_str(),std::ios_base::out|std::ios_base::app);
-					ss.str("");
-					for(auto& a:input_grid) {
-						if(a.getFillColor()==sf::Color::Black) {
-							ss << 1;
-						} else {
-							ss << 0;
-						}
-					}
-					ss << '\n';
-					auto str = ss.str();
-					foutput.write(str.c_str(),str.size());
-					ss.str("");
-					ss << "Pattern saves as: " << tmp.toAnsiString() << " File is : " << fpath;
-					log(ss.str());
+			kb_char = sf::String(event.text.unicode);
 
-					for(auto& a:input_grid) {
-						a.setFillColor(sf::Color::White);
-					}
-				}
-			}
+
 			break;
 		}
 	}
@@ -391,28 +368,7 @@ bool update()
 		}
 	}
 
-	auto now = beholder_speed.getElapsedTime();
-	if(now>sf::milliseconds(250)) {
-		ans = beholder->analyze(input_grid);
-		std::stringstream ss;
-		ss << "The Beholder sees a: ";
-		if(ans==10) {
-			ss << '+';
-		} else if(ans==11) {
-			ss << '-';
-		} else {
-			ss << ans;
-		}
 
-		message.setString(ss.str());
-		beholder_speed.restart();
-
-		if(message.getLocalBounds().width>message_camera.getSize().x) {
-			auto messagepos = message.getGlobalBounds();
-			message_camera.setSize(sf::Vector2f(message.getLocalBounds().width,60));
-			message_camera.setCenter(sf::Vector2f(messagepos.left+messagepos.width/2,messagepos.top+messagepos.height/2));
-		}
-	}
 
 	return true;
 }
@@ -432,6 +388,12 @@ void render()
 
 	window.setView(message_camera);
 	window.draw(message);
+
+	printer.setString(kb_char);
+	printer.setColor(sf::Color::Black);
+	printer.setOrigin(printer.getLocalBounds().width/2.f,printer.getLocalBounds().height/2.f);
+	printer.setPosition(16.f,16.f);
+	window.draw(printer);
 
 	window.display();
 }

@@ -249,6 +249,9 @@ public:
 		for(int i = 0; i<lrs; i++) {
 			layers.push_back(Membrane(neuron_count,previousLayerSize));
 			previousLayerSize = layers.back().size();
+			if(i == 0){
+				neuron_count = 2*neuron_count/3;
+			}
 		}
 		layers.push_back(Membrane(out,previousLayerSize));///output layer
 	}
@@ -331,12 +334,7 @@ public:
 	virtual void train(std::vector<double> inputs,char exp)
 	{
 		auto values = inputs;
-		int xp = strtol(&exp,0,0);
-		if(exp=='9'+1) {
-			xp = 10;
-		} else if(exp=='9'+2) {
-			xp = 11;
-		}
+		int xp = exp;
 		int answer = analyze(values);
 		std::vector<double> deltas;
 		for(int i = 0; i<outputs; i++) {
@@ -355,7 +353,6 @@ public:
 			double orig_out = getMembranes()[o_layer].getNeurons()[i].getOutputValue();
 			double delta = deltas[z++] - orig_out;
 			getMembranes()[o_layer].getNeurons()[i].setDelta(delta);
-			//double error = delta*orig_out*(1-orig_out);
 			double error = delta*(1-tanh(orig_out)*tanh(orig_out));
 			getMembranes()[o_layer].getNeurons()[i].setError(error);
 		}
@@ -411,71 +408,6 @@ public:
 		}
 	}
 
-	virtual void train(std::vector<sf::RectangleShape>& inputs,char exp)
-	{
-		const char* expected = &exp;
-		int xp = strtol(expected,0,0);
-		int answer = analyze(inputs);
-		std::vector<double> deltas;
-		int combined = answer^xp;
-		for(int i = 0; i<outputs; i++) {
-			int var1 = xp&1?1:0;
-			if(var1) {
-				deltas.push_back(0.75);
-			} else {
-				deltas.push_back(0.25);
-			}
-			xp >>= 1;
-		}
-		///Output layer error
-		int o_layer =getMembranes().size()-1;
-		int z = 0;
-		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
-			double orig_out = getMembranes()[o_layer].getNeurons()[i].getOutputValue();
-			double delta = deltas[z++] - orig_out;
-			getMembranes()[o_layer].getNeurons()[i].setDelta(delta);
-			double error = delta*orig_out*(1-orig_out);
-			getMembranes()[o_layer].getNeurons()[i].setError(error);
-		}
-		///Hidder layer error
-		for(int i = getMembranes().size()-2; i>-1; i--) {
-			int x = 0;
-			for(int j = getMembranes()[i].getNeurons().size()-1; j>-1; j--) {
-				double sum = 0;
-				for(int k = getMembranes()[i+1].getNeurons().size()-1; k>-1; k--) {
-					sum += getMembranes()[i+1].getNeurons()[k].getError()*getMembranes()[i+1].getNeurons()[k].getWeights()[j];
-				}
-				double error = getMembranes()[i].getNeurons()[j].getOutputValue()*sum*(1-getMembranes()[i].getNeurons()[j].getOutputValue());
-				getMembranes()[i].getNeurons()[j].setError(error);
-
-			}
-		}
-
-		///Output layer correction
-		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
-			for(int j = 0; j<getMembranes()[o_layer].getNeurons()[i].getWeights().size(); j++) {
-				double delta_w = (2*learning_rate)*getMembranes()[o_layer].getNeurons()[i].getInputValues()[j]*getMembranes()[o_layer].getNeurons()[i].getError();
-				getMembranes()[o_layer].getNeurons()[i].updateWeight(j,delta_w);
-			}
-		}
-
-		///Hidden layer correction
-		for(int i = getMembranes().size()-2; i>-1; i--) {
-			for(int j = getMembranes()[i].getNeurons().size()-1; j>-1; j--) {
-				for(int k = 0; k<getMembranes()[i].getNeurons()[j].getWeights().size(); k++) {
-					double delta_w = learning_rate*getMembranes()[i].getNeurons()[j].getInputValues()[k]*getMembranes()[i].getNeurons()[j].getError();
-					getMembranes()[i].getNeurons()[j].updateWeight(k,delta_w);
-				}
-			}
-		}
-		global_error = 0;
-		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
-			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
-		}
-		if(learning_rate>base_rate) {
-			learning_rate *= 0.9;
-		}
-	}
 	void increaseLearningRate()
 	{
 		learning_rate *= 1.15;
@@ -499,36 +431,13 @@ public:
 			int result = 0;
 			for(int i = 0; i<outs.size(); i++) {
 				result <<= 1;
-				result |= outs[i]>0.5?1:0;
+				result |= outs[i]>0?1:0;
 			}
 			return result;
 		}
 		return -1;
 	}
 
-	virtual int analyze(std::vector<sf::RectangleShape>& inputs)
-	{
-		if(inputs.size()==columns*rows) {
-			std::vector<double> values;
-			for(auto& a:inputs) {
-				auto clr = a.getFillColor();
-				if(clr==sf::Color::Black) {
-					values.push_back(1.f);
-				} else {
-					values.push_back(0.f);
-				}
-			}
-
-			auto outs = Brain::update(values);
-			int result = 0;
-			for(int i = 0; i<outs.size(); i++) {
-				result <<= 1;
-				result |= outs[i]>0.5?1:0;
-			}
-			return result;
-		}
-		return -1;
-	}
 };
 template <typename T> class DataSet {
 protected:
@@ -604,5 +513,93 @@ public:
 		indices.pop_back();
 	}
 };
+class Trainer{
+protected:
+	Beholder* student;
+	std::unique_ptr<sf::Font> font;
+	std::unique_ptr<DataSet<double>> training_data;
+	std::vector<char> answers;
+	double error;
+	unsigned int mode;
+public:
+	static const unsigned int BATCH = 0;
+	static const unsigned int ONLINE = 1;
+	static const unsigned int HYBRID = 2;
+	static const unsigned int ASCII_BEGIN = 33;
+	static const unsigned int ASCII_END = 126;
+	Trainer(std::string data):
+		font(new sf::Font()),training_data(new DataSet<double>()),
+		error(0.0),mode(BATCH)
+	{
+		font->loadFromFile(data);
+	}
+	void assingStudent(Beholder* learnee)
+	{
+		student = learnee;
+	}
+	void setMode(unsigned int mod = 0){
+		mode = mod;
+	}
+	double globalError()
+	{
+		return error;
+	}
+	void prepareData()
+	{
+		sf::RenderTexture drawboard;
+		drawboard.create(32,32);
 
+		sf::Text printer("",*font);
+		printer.setColor(sf::Color::Black);
+		char current = ASCII_BEGIN;
+		while(current<=ASCII_END){
+			answers.push_back(current);
+			printer.setString(sf::String(current));
+			printer.setOrigin(printer.getLocalBounds().width/2.f,printer.getLocalBounds().height/2.f);
+			printer.setPosition(16.f,16.f);
+			drawboard.clear(sf::Color::White);
+			drawboard.draw(printer);
+			drawboard.display();
+			auto img = drawboard.getTexture().copyToImage();
+			std::vector<double> lesson;
+			for(int y = 0;y<32;y++){
+				for(int x = 0;x<32;x++){
+					if(img.getPixel(x,y) == sf::Color::Black){
+						lesson.push_back(1.0);
+					}else{
+						lesson.push_back(0.0);
+					}
+				}
+			}
+			training_data->push_row(lesson);
+			current++;
+		}
+	}
+
+	void train()
+	{
+		if(student != nullptr){
+			if(mode == BATCH){
+				error = 0.0;
+				for(int i = 0;i<answers.size();i++){
+					student->train(training_data->at(i),answers[i]);
+					error += student->getGlobalError();
+				}
+				error /= (double)answers.size();
+				student->correct();
+			}else if(mode == HYBRID){
+
+			}else{
+				error = 0.0;
+				for(int i = 0;i<answers.size();i++){
+					student->train(training_data->at(i),answers[i]);
+					error += student->getGlobalError();
+					student->correct();
+				}
+				error /= (double)answers.size();
+				
+			}
+		}
+	}
+};
 #endif
