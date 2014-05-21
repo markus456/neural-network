@@ -226,6 +226,7 @@ void train()
 		}
 		beholder->train(training_set[hardest].at(0),hardest);
 		errors.push_back(beholder->getGlobalError());
+		beholder->correct();
 		error_avg = 0.0;
 		for(double d:errors) {
 			error_avg += d;

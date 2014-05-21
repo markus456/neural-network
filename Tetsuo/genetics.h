@@ -627,8 +627,8 @@ public:
 			}
 			activation += weights[weights.size()-1]*bias;
 		}
-		double sigmoid = (1.f/(1+exp(-activation/GenParams::ACTIVATION_RESPONSE)));
-		return sigmoid;
+		//double sigmoid = (1.f/(1+exp(-activation/GenParams::ACTIVATION_RESPONSE)));
+		return tanh(activation);
 	}
 	std::vector<double> getWeights()
 	{

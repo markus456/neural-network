@@ -124,7 +124,7 @@ public:
 	{
 		error_delta = d;
 	}
-	double getDelta()
+	double getDelta()const
 	{
 		return error_delta;
 	}
@@ -136,15 +136,15 @@ public:
 	{
 		return in_values;
 	}
-	double getError()
+	double getError()const
 	{
 		return signal_error;
 	}
-	unsigned int dnaSize()
+	unsigned int dnaSize()const
 	{
 		return weights.size();
 	}
-	std::vector<double>& getWeights()
+	const std::vector<double>& getWeights()const
 	{
 		return weights;
 	}
@@ -171,10 +171,10 @@ public:
 			}
 			activation += weights[weights.size()-1]*bias;
 		}
-		//double th = tanh(activation) + 0.001*activation;
-		double sigmoid = (1.f/(1+exp(-activation/ACTIVATION_RESPONSE)));
-		out_value = sigmoid;
-		return sigmoid;
+		double th = tanh(activation) + 0.001*activation;
+		//double sigmoid = (1.f/(1+exp(-activation/ACTIVATION_RESPONSE)));
+		out_value = th;
+		return th;
 	}
 	double getOutputValue()
 	{
@@ -212,7 +212,7 @@ public:
 		}
 		return output;
 	}
-	std::vector<double> getGenomes()
+	std::vector<double> getGenomes()const
 	{
 		std::vector<double> genes;
 		std::vector<double> input;
@@ -302,7 +302,7 @@ public:
 		return layers;
 	}
 
-	std::list<double> buildGenebase()
+	std::list<double> buildGenebase()const
 	{
 		std::list<double> genebase;
 		std::vector<double> tmp;
@@ -322,6 +322,12 @@ protected:
 public:
 	///Number of pixels in inputs and number of output bits, number neuron layers and the neuron count for each layer.
 	Beholder(int ccount, int rcount, unsigned int obits, int lrs, int nrns):Brain(ccount*rcount,obits,lrs,nrns), columns(ccount),rows(rcount),outputs(obits),learning_rate(0.1),base_rate(0.01) {}
+	Beholder(const Beholder& b)
+	{
+		auto prev_brain = b.buildGenebase();
+		format(prev_brain);
+	}
+	///Train with a set of data
 	virtual void train(std::vector<double> inputs,char exp)
 	{
 		auto values = inputs;
@@ -336,9 +342,9 @@ public:
 		for(int i = 0; i<outputs; i++) {
 			int var1 = xp&1?1:0;
 			if(var1) {
-				deltas.push_back(0.75);
+				deltas.push_back(1.0);
 			} else {
-				deltas.push_back(0.25);
+				deltas.push_back(-1.0);
 			}
 			xp >>= 1;
 		}
@@ -349,7 +355,8 @@ public:
 			double orig_out = getMembranes()[o_layer].getNeurons()[i].getOutputValue();
 			double delta = deltas[z++] - orig_out;
 			getMembranes()[o_layer].getNeurons()[i].setDelta(delta);
-			double error = delta*orig_out*(1-orig_out);
+			//double error = delta*orig_out*(1-orig_out);
+			double error = delta*(1-tanh(orig_out)*tanh(orig_out));
 			getMembranes()[o_layer].getNeurons()[i].setError(error);
 		}
 		///Hidder layer error
@@ -360,12 +367,24 @@ public:
 				for(int k = getMembranes()[i+1].getNeurons().size()-1; k>-1; k--) {
 					sum += getMembranes()[i+1].getNeurons()[k].getError()*getMembranes()[i+1].getNeurons()[k].getWeights()[j];
 				}
-				double error = getMembranes()[i].getNeurons()[j].getOutputValue()*sum*(1-getMembranes()[i].getNeurons()[j].getOutputValue());
+				double o_val = getMembranes()[i].getNeurons()[j].getOutputValue();
+				double error = sum*(1-tanh(o_val)*tanh(o_val)) + getMembranes()[i].getNeurons()[j].getError();
 				getMembranes()[i].getNeurons()[j].setError(error);
 
 			}
 		}
 
+		global_error = 0;
+		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
+			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
+		}
+		if(learning_rate>base_rate) {
+			learning_rate *= 0.9;
+		}
+	}
+
+	void correct(){
+		int o_layer =getMembranes().size()-1;
 		///Output layer correction
 		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
 			for(int j = 0; j<getMembranes()[o_layer].getNeurons()[i].getWeights().size(); j++) {
@@ -383,14 +402,15 @@ public:
 				}
 			}
 		}
-		global_error = 0;
-		for(int i = getMembranes()[o_layer].getNeurons().size()-1; i>-1; i--) {
-			global_error += pow(getMembranes()[o_layer].getNeurons()[i].getDelta(),2);
-		}
-		if(learning_rate>base_rate) {
-			learning_rate *= 0.9;
+
+		///Reset error values
+		for(int i = getMembranes().size()-1; i>-1; i--) {
+			for(int j = getMembranes()[i].getNeurons().size()-1; j>-1; j--) {
+				getMembranes()[i].getNeurons()[j].setError(0.0);
+			}
 		}
 	}
+
 	virtual void train(std::vector<sf::RectangleShape>& inputs,char exp)
 	{
 		const char* expected = &exp;
